@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Budget – Din ekonomiska översikt</title>
+<link rel="stylesheet" href="../shared/style.css">
+
+<!-- ─── PWA ─── -->
+<link rel="manifest" href="../manifest.json">
+<meta name="theme-color" content="#0f0f0f">
+<meta name="description" content="Svensk budgetapp med korsvisa sammanställningar, buffertkoll och jämförelse mot SCB, Konsumentverket och Swedbank.">
+
+<!-- ─── Ikoner ─── -->
+<link rel="icon" type="image/png" sizes="192x192" href="../icon/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="../icon/icon-512.png">
+<link rel="apple-touch-icon" sizes="192x192" href="../icon/icon-192.png">
+
+<!-- ─── iOS-specifikt ─── -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Budget">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- ─── Misc ─── -->
+<meta name="format-detection" content="telephone=no">
+</head>
+<body>
+<div class="save-badge" id="save-badge">💾 Sparat</div>
+
+<div class="container">
+  <div class="toolbar">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <span class="toolbar-title">💰 Hushållsbudget</span>
+      <div class="view-toggle" id="view-toggle">
+        <button data-view-mode="month" class="active" title="Visa belopp per månad">kr/mån</button>
+        <button data-view-mode="year" title="Visa belopp per år">kr/år</button>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="toolbar-btn" id="export-btn" title="Ladda ner som JSON-fil">📤 Exportera</button>
+      <button class="toolbar-btn" id="import-btn" title="Ladda upp sparad JSON-fil">📥 Importera</button>
+      <button class="toolbar-btn danger" id="clear-btn" title="Rensa all sparad data">🗑️ Rensa</button>
+    </div>
+  </div>
+
+<!-- Hopfällbar info-ruta -->
+<details class="info-box">
+  <summary>ℹ️ Om kalkylatorn – klicka för att visa förklaringar</summary>
+  <div class="info-content">
+    <strong style="color: #ff9800;">ℹ️ SÅ FUNGERAR APPEN</strong><br>
+    • <strong>Flikar:</strong> Varje kategori har en egen flik. Fyll bara i det som gäller ditt hushåll – tomma fält räknas inte med.<br>
+    • <strong>Inkomster:</strong> Ange lön i brutto eller netto. Skattesatsen är en uppskattning – justera vid behov.<br>
+    • <strong>Boende &amp; bolån:</strong> Bolån hanteras under 💳 Skulder. Ränta och amortering räknas automatiskt in i boendekostnaden.<br>
+    • <strong>Barn:</strong> Ange barnets andel av mat och boende i %. Jämförs mot Swedbanks siffror baserat på ålder.<br>
+    • <strong>Buffert:</strong> Nuvarande saldo (inte månadssparande). Visas överst i Sparande-fliken.<br>
+    • <strong>Korsvisa sammanställningar:</strong> Försäkringar, bilkostnader och abonnemang samlas automatiskt från alla flikar.<br>
+    • <strong>Jämförelser:</strong> Din fördelning jämförs mot SCB, Konsumentverket och Swedbank. Källor är klickbara.<br>
+    • <strong>Årsvy:</strong> Växla mellan kr/mån och kr/år i verktygsraden. Inmatning sker alltid i kr/mån.<br>
+    • <strong>Din data:</strong> Allt sparas lokalt i webbläsaren. Inget skickas någonstans. Använd 📤 Exportera för backup.
+  </div>
+</details>
+
+  <nav class="section-nav" id="section-nav"></nav>
+  <div id="budget-container"></div>
+</div>
+
+<script src="../shared/viewbar.js"></script>
+<script src="../shared/ageCurve.js"></script>
+<script src="data.js"></script>
+<script src="calculator.js"></script>
+<script src="storage.js"></script>
+<script src="render.js"></script>
+<script src="summary.js"></script>
+<script>
+  // ── Initiering ──
+  document.getElementById('export-btn').addEventListener('click', exportToFile);
+  document.getElementById('import-btn').addEventListener('click', importFromFile);
+  document.getElementById('clear-btn').addEventListener('click', clearState);
+  loadState();
+  renderApp();
+  buildViewbar('budget');
+
+  // ── Service Worker ──
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('../sw.js')
+        .then((reg) => console.log('[PWA] Service Worker registrerad:', reg.scope))
+        .catch((err) => console.warn('[PWA] SW-registrering misslyckades:', err));
+    });
+  }
+</script>
+</body>
+</html>
