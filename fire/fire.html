@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FIRE Simulator – Dynamisk Ackumuleringsmodell</title>
+	<link rel="stylesheet" href="../shared/style.css">
+    <link rel="manifest" href="../manifest.json">
+    <meta name="theme-color" content="#ff9800">
+    <meta name="description" content="Svensk FIRE-kalkylator med ISK/Depå-skatt, Monte Carlo och amorteringskrav">
+    <link rel="icon" type="image/png" sizes="192x192" href="../icon/icon-192.png">
+	<link rel="icon" type="image/png" sizes="512x512" href="../icon/icon-512.png">
+	<link rel="apple-touch-icon" sizes="192x192" href="../icon/icon-192.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FIRE Sim">
+    <meta name="format-detection" content="telephone=no">
+</head>
+<body>
+<div class="save-badge" id="save-badge">💾 Sparat</div>
+
+<div class="container">
+
+    <!-- ═══════════ TOOLBAR ═══════════ -->
+    <div class="toolbar">
+        <h1 class="toolbar-title">🔥 FIRE Simulator</h1>
+        <div class="toolbar-actions">
+            <button id="refresh-btn" class="toolbar-btn" title="Räkna om alla beräkningar">🔄 Räkna om</button>
+            <button id="export-btn" class="toolbar-btn" title="Ladda ner som JSON-fil">📤 Exportera</button>
+            <button id="import-btn" class="toolbar-btn" title="Ladda upp sparad JSON-fil">📥 Importera</button>
+            <button id="reset-btn" class="toolbar-btn danger" title="Rensa all sparad data">🗑️ Rensa</button>
+        </div>
+    </div>
+
+    <!-- Bridge-status (Budget → FIRE) -->
+<div id="bridge-bar" class="bridge-bar"></div>
+
+<!-- Hopfällbar info-ruta -->
+<details class="info-box">
+        <summary>ℹ️ Om kalkylatorn – klicka för att visa förklaringar</summary>
+        <div class="info-content">
+            <strong style="color: #ff9800;">ℹ️ OM KALKYLATORN</strong><br>
+            • <strong>ISK-skatt:</strong> Årlig schablonskatt (procentsatsen du själv anger) på hela ISK-värdet. Skatten dras en gång per år från ISK-kontot.<br>
+            • <strong>Depåskatt:</strong> 30% vinstskatt vid försäljning. Kalkylatorn använder ditt angivna <strong>Depå Inköpspris</strong> för att beräkna vinsten. Vid uttag säljs proportionerligt av innehavet – det vill säga samma andel av dina ursprungliga inköp säljs som andelen av totala värdet du tar ut. Detta kallas genomsnittsmetoden och är den metod Skatteverket godkänner när man inte kan spåra exakt vilka inköp som sålts (FIFO).<br>
+            • <strong>Uttagsfördelning i FIRE:</strong> När uttag börjar sker de <strong>proportionerligt mot kontornas aktuella saldo</strong> – inte 50/50. Om ISK är 60 % och Depå 40 % av portföljen vid FIRE, tas 60 % av uttagsbehovet från ISK och 40 % från Depå. Fördelningen räknas om varje år baserat på saldona.<br>
+            • <strong>Inkludera husets nettoegendom:</strong> När den är ikryssad visas husets värde (efter skulder) i din totala förmögenhet. ⚠️ <strong>OBS!</strong> Huset påverkar INTE ditt FIRE-uttag – du kan inte leva på huset. Det visas endast för att ge en komplett bild av din totala förmögenhet. Uttagen baseras enbart på din portfölj (ISK + Depå).<br>
+            • <strong>Amortering:</strong> Du kan välja mellan två lägen:<br>
+            &nbsp;&nbsp;&nbsp;➜ <span style="color:#4caf50;">Fast amortering (standard):</span> Använder den månadsamortering du själv fyllt i. Samma belopp amorteras varje månad under hela simuleringen.<br>
+            &nbsp;&nbsp;&nbsp;➜ <span style="color:#ffaa44;">Svenska amorteringskrav (bocka i):</span> Amorteringen styrs automatiskt av belåningsgraden enligt Finansinspektionens regler:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;🔹 Lån över 70% av bostadens värde: <strong>2%</strong> av lånebeloppet per år<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;🔹 Lån mellan 50-70%: <strong>1%</strong> av lånebeloppet per år<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;🔹 Lån under 50%: <strong>0%</strong> (inget lagstadgat krav)<br>
+            • <strong>Avkastningsmodell:</strong> Den deterministiska simuleringen använder <strong>medelvärdet</strong> mellan aritmetisk och geometrisk avkastning. Geometrisk avkastning (μ − σ²/2) är den realistiska medianbanan över tid vid sammansatt tillväxt, men blir för konservativ för portföljer med hög volatilitet. Medelvärdet ger en balanserad uppskattning. I portföljsammanställningen visas både aritmetisk och geometrisk i parentes.<br>
+            • <strong>Monte Carlo:</strong> Simulerar upp till <strong>200 framtida scenarier</strong> (50 om svenska amorteringskrav är aktiverat). <strong>Så här räknas resultatet fram:</strong><br>
+            &nbsp;&nbsp;&nbsp;➜ Varje simulering körs år för år. ISK och Depå använder <strong>samma marknadsfaktor</strong> varje år – i ett bra år går båda upp, i ett dåligt år går båda ner.<br>
+            &nbsp;&nbsp;&nbsp;➜ Efter alla simuleringar sorteras de per år och de <strong>10 % lägsta + 10 % högsta</strong> kastas bort. Medelvärdet av de mittersta <strong>80 %</strong> används som årets värde.<br>
+            &nbsp;&nbsp;&nbsp;➜ ISK, Depå och deras kostnadsbas hämtas från <strong>exakt samma simuleringar</strong> som valdes för totalen. Detta garanterar att <strong>ISK + Depå = Total</strong> för varje år.<br>
+            &nbsp;&nbsp;&nbsp;➜ Resultatet är en <strong>jämn, representativ bana</strong> som ligger nära medianen. Tabellen visar alltså inte en enskild slumpmässig simulering, utan ett trimmat genomsnitt över många scenarier.<br>
+            • <strong>FIRE-start:</strong> Året du anger under "Byte till FIRE efter år". Då slutar sparandet och uttagen börjar baserat på dina levnadskostnader + ränta + amortering + skatt. <strong>Portföljens allokering är densamma före och efter FIRE</strong> – du behåller samma fördelning mellan tillgångar i båda faserna.<br>
+            • <strong>Uttagsfrekvens:</strong> Tabellens sista kolumn visar uttaget som procent av portföljvärdet vid årets början. <span style="color:#4caf50;">≤ 4,5 % = hållbart enligt 4%-regeln</span>, <span style="color:#ffaa44;">4,5–6 % = kräver högre avkastning</span>, <span style="color:#ff6b6b;">&gt; 6 % = riskabelt</span>.<br>
+            • <strong>Nominella vs reala belopp:</strong> Kassaflödesboxen visar belopp i <strong>nominella</strong> kronor (faktiska kronor vid den tidpunkten) med <strong>reala</strong> belopp i parentes (dagens köpkraft). I tabellen visas portföljvärde och total förmögenhet i <strong>reala</strong> kronor, medan återstående lån och årlig belastning visas i <strong>nominella</strong> kronor.
+        </div>
+    </details>
+
+    <!-- Sticky flik-navigation -->
+    <nav class="section-nav" id="section-nav" aria-label="Sektioner">
+		<button class="nav-pill active" data-tab="formogenhet">💰 Förmögenhet</button>
+		<button class="nav-pill" data-tab="boende">🏠 Boende</button>
+		<button class="nav-pill" data-tab="kostnader">💸 Kostnader</button>
+		<button class="nav-pill" data-tab="allokering">📊 Allokering</button>
+		<button class="nav-pill" data-tab="simulering">⚙️ Simulering</button>
+		<button class="nav-pill" data-tab="tabell">📋 Tabell</button>
+        <button class="nav-pill" data-tab="eget-uttag">🎯 Eget uttag</button>
+        <button class="nav-pill summary-pill" data-tab="sammanstallning">📊 Sammanställning</button>
+	</nav>
+
+    <main class="tab-content">
+
+        <!-- ═══════════ FLIK: FÖRMÖGENHET ═══════════ -->
+        <section class="tab-panel active" id="tab-formogenhet">
+            <div class="section-nav-buttons top">
+                <span></span>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+
+            <div class="card-grid two-col">
+<div class="card">
+    <h2>1. Mina tillgångar <span class="q-icon" data-tooltip-field="accounts">?</span></h2>
+
+    <div class="accounts-list" id="accounts-list"></div>
+
+    <button type="button" class="toolbar-btn" id="add-account-btn" style="width:100%; margin-bottom:12px;">+ Lägg till tillgång</button>
+
+    <div id="accounts-summary" style="margin-bottom:12px; padding:10px 12px; background:#1a1a1a; border-radius:6px;"></div>
+
+    <div class="form-group"><label>ISK Schablonskatt (%/år):</label><input type="text" inputmode="decimal" id="isk-tax" value="1.086"></div>
+
+    <!-- Dolda fält – dessa läses av FireCalc -->
+    <input type="hidden" id="isk-balance" value="0">
+    <input type="hidden" id="depa-value" value="0">
+    <input type="hidden" id="depa-cost" value="0">
+    <input type="hidden" id="other-assets" value="0">
+</div>
+                <div class="card">
+                    <h2>Sparande fram till FIRE <span class="q-icon" data-tooltip-field="save-isk">?</span></h2>
+                    <div class="form-group"><label>Nysparande ISK (kr/mån):</label><input type="text" inputmode="decimal" id="save-isk" value="0"></div>
+                    <div class="form-group"><label>Nysparande DEPÅ (kr/mån):</label><input type="text" inputmode="decimal" id="save-depa" value="0"></div>
+                </div>
+            </div>
+
+            <div class="section-nav-buttons bottom">
+                <span></span>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+        </section>
+
+        <!-- ═══════════ FLIK: BOENDE ═══════════ -->
+        <section class="tab-panel" id="tab-boende">
+            <div class="section-nav-buttons top">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+
+            <div class="card">
+                <h2>2. Boende <span class="q-icon" data-tooltip-field="mortgage-debt">?</span></h2>
+                <div class="form-group"><label>Husets marknadsvärde (kr):</label><input type="text" inputmode="decimal" id="house-value" value="0"></div>
+                <div class="form-group"><label>Bolåneskuld (kr):</label><input type="text" inputmode="decimal" id="mortgage-debt" value="0"></div>
+                <div class="form-group"><label>Räntesats (%):</label><input type="text" inputmode="decimal" id="interest-rate" value="3.5"></div>
+                <div class="form-group"><label>Månadsamortering (kr/mån):</label><input type="text" inputmode="decimal" id="amortization" value="0"></div>
+                <div class="form-group"><label>Förväntad husvärdeökning (%/år):</label><input type="text" inputmode="decimal" id="house-appreciation" value="1.0"></div>
+            </div>
+
+            <div class="section-nav-buttons bottom">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+        </section>
+
+        <!-- ═══════════ FLIK: KOSTNADER ═══════════ -->
+        <section class="tab-panel" id="tab-kostnader">
+            <div class="section-nav-buttons top">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+
+            <div class="card">
+                <h2>3. Månadskostnader</h2>
+                <div class="form-group"><label>Fasta kostnader (kr/mån) <span class="q-icon" data-tooltip-field="fixed-costs">?</span>:</label><input type="text" inputmode="decimal" id="fixed-costs" value="0"></div>
+                <div class="form-group"><label>Rörliga kostnader (kr/mån) <span class="q-icon" data-tooltip-field="variable-costs">?</span>:</label><input type="text" inputmode="decimal" id="variable-costs" value="0"></div>
+                <div class="form-group"><label>Husdrift (kr/mån) <span class="q-icon" data-tooltip-field="house-upkeep">?</span>:</label>	<input type="text" inputmode="decimal" id="house-upkeep" value="0"></div>
+				<div class="form-group"><label>Övrigt (kr/mån):</label><input type="text" inputmode="decimal" id="other-costs" value="0"></div>
+                <div class="form-group"><label>Inflation (%/år):</label><input type="text" inputmode="decimal" id="inflation" value="2.5"></div>
+            </div>
+
+            <div class="section-nav-buttons bottom">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+        </section>
+
+        <!-- ═══════════ FLIK: ALLOKERING ═══════════ -->
+        <section class="tab-panel" id="tab-allokering">
+            <div class="section-nav-buttons top">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+
+            <section class="card tall-card" id="allocation-card">
+                <h2>4. Tillgångsallokering</h2>
+                <!-- renderAssets() fyller denna -->
+            </section>
+
+            <div class="section-nav-buttons bottom">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+        </section>
+
+        <!-- ═══════════ FLIK: SIMULERING ═══════════ -->
+        <section class="tab-panel" id="tab-simulering">
+            <div class="section-nav-buttons top">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+
+            <section class="card" id="simulation-settings-card">
+                <h2>Simuleringsinställningar</h2>
+                <div class="form-group">
+                    <label>Antal år att simulera totalt:</label>
+                    <input type="text" inputmode="numeric" id="sim-years" value="35" style="width:140px;">
+                </div>
+                <div class="form-group">
+                    <label>Byte till FIRE efter år:</label>
+                    <input type="text" inputmode="numeric" id="fire-start-year" value="15" style="width:140px;">
+                </div>
+
+                <div class="checkbox-orange">
+                    <label><input type="checkbox" id="include-house" checked> Inkludera husets nettoegendom</label>
+                </div>
+                <div class="checkbox-orange">
+                    <label><input type="checkbox" id="monte-carlo"> Aktivera Monte Carlo (<span id="mc-count">200</span> simuleringar)</label>
+                </div>
+                <div class="checkbox-orange">
+                    <label><input type="checkbox" id="amortization-rules"> Svenska amorteringskrav (1-2% baserat på belåningsgrad)</label>
+                </div>
+				
+				<div class="form-group">
+					<label>Uttagsstrategi:</label>
+					<select id="withdrawal-strategy" style="width:220px;">
+						<option value="proportional">Proportionerligt (ISK + Depå)</option>
+						<option value="depa_first">Töm Depå först</option>
+					</select>
+				</div>
+            </section>
+
+            <div class="section-nav-buttons bottom">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+        </section>
+
+
+        <!-- ═══════════ FLIK: RESULTAT ═══════════ -->
+        <section class="tab-panel" id="tab-tabell">
+            <div class="section-nav-buttons top">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+
+            <section class="card" id="fire-table-card">
+    <h2>Simuleringsresultat</h2>
+    <div id="fire-table-summary" style="margin-bottom:16px; padding:14px 16px; background:#1f1f1f; border-left:3px solid var(--accent); border-radius:6px;"></div>
+    <div style="overflow-x:auto;">
+                    <table id="fire-table">
+                        <thead>
+                            <tr>
+                                <th>År</th>
+                                <th>Fas</th>
+                                <th>Portföljvärde (real)</th>
+                                <th>Total Förmögenhet (real)</th>
+                                <th>Återstående Lån</th>
+                                <th>Årlig belastning<br><span style="font-size:10px; color:#888;">(uttag + skatt, nominellt)</span></th>
+                                <th>Uttagsfrekvens<br><span style="font-size:10px; color:#888;">(uttag / portfölj)</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="fire-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div class="section-nav-buttons bottom">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+        </section>
+
+
+		        <!-- ═══════════ FLIK: EGET UTTAG ═══════════ -->
+        <section class="tab-panel" id="tab-eget-uttag">
+            <div class="section-nav-buttons top">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+
+            <section class="card">
+                <h2>🎯 Eget uttag — testa din egen plan</h2>
+                <div style="color:#888; font-size:13px; margin-bottom:16px; line-height:1.6;">
+                    Fristående what-if-kalkylator. Använder samma portfölj, allokering, skatter och avkastning som huvudkalkylen — men du bestämmer själv hur mycket du vill ta ut och när. Monte Carlo används inte här; tabellen visar en deterministisk bana.
+                </div>
+                <div class="form-group">
+                    <label>Uttag per år (dagens köpkraft):</label>
+                    <input type="text" inputmode="decimal" id="cg-amount" value="0" placeholder="t.ex. 300000">
+                </div>
+                <div class="form-group">
+                    <label>Börja ta ut om (antal år från idag):</label>
+                    <input type="text" inputmode="numeric" id="cg-start-year" value="15" placeholder="t.ex. 15">
+                </div>
+                <div id="cg-summary" style="margin-top:16px; padding:14px 16px; background:#1f1f1f; border-left:3px solid var(--accent); border-radius:6px;"></div>
+            </section>
+
+            <section class="card" id="cg-table-card">
+                <h2>Simulering med eget uttag</h2>
+                <div style="overflow-x:auto;">
+                    <table id="cg-table">
+                        <thead>
+                            <tr>
+                                <th>År</th>
+                                <th>Fas</th>
+                                <th>Portföljvärde (real)</th>
+                                <th>Total Förmögenhet (real)</th>
+                                <th>Återstående Lån</th>
+                                <th>Årlig belastning<br><span style="font-size:10px; color:#888;">(uttag, nominellt)</span></th>
+                                <th>Uttagsfrekvens<br><span style="font-size:10px; color:#888;">(uttag / portfölj)</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="cg-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div class="section-nav-buttons bottom">
+                <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+                <button class="section-nav-btn" data-nav="next">Nästa flik →</button>
+            </div>
+        </section>
+
+
+
+        <!-- ═══════════ FLIK: SAMMANSTÄLLNING ═══════════ -->
+        <section class="tab-panel" id="tab-sammanstallning">
+    <div class="section-nav-buttons top">
+        <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+        <span></span>
+    </div>
+
+    <!-- 1. Portföljsammanställning -->
+    <section class="card summary-card" id="portfolio-summary-card">
+        <h2>📊 Portföljsammanställning</h2>
+        <div class="summary-section">
+            <div class="summary-heading">📈 VIKTAD AVKASTNING</div>
+            <div class="summary-row">Viktad avkastning ISK: <span id="yield-spar-isk" class="green">0%</span></div>
+            <div class="summary-row">Viktad avkastning Depå: <span id="yield-spar-depa" class="green">0%</span></div>
+            <div class="summary-row">Viktad avkastning totalt: <span id="yield-total-spar" class="green">0%</span></div>
+<div id="allocation-warning" style="display:none; margin-top:10px; padding:11px 14px; background:rgba(255,152,0,0.1); border-left:3px solid #ff9800; border-radius:6px; font-size:13px; line-height:1.55; color:#ffcc80;"></div>
+<div style="font-size:12px; color:#888; margin-top:6px; line-height:1.5;">
+    Simuleringen använder <strong>medelvärdet mellan aritmetisk och geometrisk avkastning</strong> som en balanserad uppskattning.
+</div>
+        </div>
+<div class="summary-section">
+    <div class="summary-heading">💰 FÖRMÖGENHETSÖVERSIKT</div>
+    <div class="summary-row">Brutto marknadsvärde portfölj idag: <span id="portfolio-value">0 kr</span></div>
+    <div class="summary-row">Eget kapital i huset idag: <span id="house-equity">0 kr</span></div>
+    <div class="summary-row">Övriga tillgångar (bil, smycken m.m.): <span id="other-assets-display">0 kr</span></div>
+    <div class="summary-row total-row"><strong>TOTAL FÖRMÖGENHET IDAG:</strong> <span id="total-assets" class="total">0 kr</span></div>
+</div>
+    </section>
+
+    <!-- 2. Kassaflöde -->
+    <section class="card" id="fire-cashflow-card">
+    <h2 id="cashflow-heading">📈 Kassaflödesbehov per år under ÅR 1 i FIRE</h2>
+    <div id="cashflow-content">Uppdateras automatiskt...</div>
+</section>
+
+    <!-- 3. Motivation -->
+    <section class="card" id="motivation-card">
+        <h2>💡 Din ekonomiska resa – motivation &amp; milstolpar</h2>
+        <div id="motivation-cards"></div>
+    </section>
+
+    <div class="section-nav-buttons bottom">
+        <button class="section-nav-btn" data-nav="prev">← Föregående flik</button>
+        <span></span>
+    </div>
+</section>
+
+    </main>
+</div>
+
+<script src="../shared/viewbar.js"></script>
+<script src="../shared/ageCurve.js"></script>
+<script src="../budget/data.js"></script>
+<script src="assets_data.js"></script>
+<script src="assets_manager.js"></script>
+<script src="fire_calculator.js"></script>
+<script src="fire_storage.js"></script>
+<script src="fire_accounts.js"></script>
+<script src="motivation.js"></script>
+<script src="tabs.js"></script>
+<script src="bridge.js"></script>
+<script src="custom_goal.js"></script>
+<script src="compare.js"></script>
+<script src="compare_housing.js"></script>
+<script src="compare_networth.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        buildViewbar('fire');
+    });
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('../sw.js')
+                .then((reg) => console.log('SW registrerad:', reg.scope))
+                .catch((err) => console.warn('SW-registrering misslyckades:', err));
+        });
+    }
+</script>
+</body>
+</html>
