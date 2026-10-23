@@ -1,11 +1,3 @@
-// ════════════════════════════════════════════════════════════════════
-// FIRE ACCOUNTS – hanterar flera ISK- och Depåkonton
-// ════════════════════════════════════════════════════════════════════
-// Summerar saldon och skriver till dolda fält (#isk-balance, #depa-value,
-// #depa-cost) som FireCalc läser som vanligt. ISK och Depå hålls åtskilda
-// hela vägen – "Totalt" är bara för syns skull.
-// ════════════════════════════════════════════════════════════════════
-
 const FireAccounts = {
   accounts: [],
   _uidCounter: 0,
@@ -19,9 +11,10 @@ const FireAccounts = {
   },
 
   add(typ = 'isk') {
+    const defaultName = typ === 'isk' ? 'ISK-konto' : typ === 'depa' ? 'Depå-konto' : 'Övrig tillgång';
     this.accounts.push({
       id: this._uid(),
-      namn: typ === 'isk' ? 'ISK-konto' : 'Depå-konto',
+      namn: defaultName,
       typ: typ,
       saldo: 0,
       inkopspris: 0
@@ -51,6 +44,9 @@ const FireAccounts = {
     const depaSum = this.accounts
       .filter(a => a.typ === 'depa')
       .reduce((s, a) => s + (parseFloat(a.saldo) || 0), 0);
+    const otherSum = this.accounts
+      .filter(a => a.typ === 'other')
+      .reduce((s, a) => s + (parseFloat(a.saldo) || 0), 0);
     const depaCost = this.accounts
       .filter(a => a.typ === 'depa')
       .reduce((s, a) => s + (parseFloat(a.inkopspris) || 0), 0);
@@ -58,15 +54,21 @@ const FireAccounts = {
     const iskEl = document.getElementById('isk-balance');
     const depaEl = document.getElementById('depa-value');
     const costEl = document.getElementById('depa-cost');
+    const otherEl = document.getElementById('other-assets');
     if (iskEl) iskEl.value = iskSum;
     if (depaEl) depaEl.value = depaSum;
     if (costEl) costEl.value = depaCost;
+    if (otherEl) otherEl.value = otherSum;
 
     this._renderSummary();
     if (typeof FireCalc !== 'undefined' && FireCalc.debouncedUpdate) {
       FireCalc.debouncedUpdate();
     }
     if (typeof fireScheduleSave === 'function') fireScheduleSave();
+	
+	if (typeof Tabs !== 'undefined' && Tabs.updatePillSums) {
+      Tabs.updatePillSums();
+    }
   },
 
   _renderSummary() {
@@ -84,6 +86,9 @@ const FireAccounts = {
     const depaSum = this.accounts
       .filter(a => a.typ === 'depa')
       .reduce((s, a) => s + (parseFloat(a.saldo) || 0), 0);
+    const otherSum = this.accounts
+      .filter(a => a.typ === 'other')
+      .reduce((s, a) => s + (parseFloat(a.saldo) || 0), 0);
     const depaCost = this.accounts
       .filter(a => a.typ === 'depa')
       .reduce((s, a) => s + (parseFloat(a.inkopspris) || 0), 0);
@@ -95,9 +100,19 @@ const FireAccounts = {
     if (depaCost > 0) {
       html += `<div class="account-total-row"><span>Depå inköpspris:</span><strong>${fmt(depaCost)}</strong></div>`;
     }
+    if (otherSum > 0) {
+      html += `<div class="account-total-row"><span>Summa övriga tillgångar:</span><strong style="color:#ffaa44;">${fmt(otherSum)}</strong></div>`;
+    }
     html += `<div class="account-total-row" style="border-top:1px solid #333; padding-top:8px; margin-top:4px;">
-      <span>Totalt (endast visning):</span><strong style="color:var(--success);">${fmt(iskSum + depaSum)}</strong>
+      <span>Totalt (alla tillgångar):</span><strong style="color:var(--success);">${fmt(iskSum + depaSum + otherSum)}</strong>
     </div>`;
+
+    if (otherSum > 0) {
+      html += `<div style="color:#888; font-size:11px; margin-top:8px; line-height:1.4;">
+        ⚠️ Övriga tillgångar (bil, smycken, konst, kontanter) räknas som ett <strong>statiskt värde</strong> — de växer inte med avkastning och används endast i nettoförmögenhetsjämförelsen. De påverkar inte FIRE-uttagen.
+      </div>`;
+    }
+
     el.innerHTML = html;
   },
 
@@ -113,19 +128,21 @@ const FireAccounts = {
     let html = '';
     this.accounts.forEach(acc => {
       const isDepa = acc.typ === 'depa';
+      const isOther = acc.typ === 'other';
       html += `
         <div class="account-item" data-id="${acc.id}">
           <div class="account-row-1">
             <input type="text" class="account-namn" data-field="namn" value="${this._esc(acc.namn)}" placeholder="Kontonamn">
             <select class="account-typ" data-field="typ">
-              <option value="isk" ${!isDepa ? 'selected' : ''}>ISK</option>
+              <option value="isk" ${!isDepa && !isOther ? 'selected' : ''}>ISK</option>
               <option value="depa" ${isDepa ? 'selected' : ''}>Depå</option>
+              <option value="other" ${isOther ? 'selected' : ''}>Övrigt</option>
             </select>
             <button type="button" class="remove-btn account-remove" title="Ta bort">×</button>
           </div>
           <div class="account-row-2">
             <div class="account-field">
-              <span class="account-field-label">Saldo (kr)</span>
+              <span class="account-field-label">Saldo / marknadsvärde (kr)</span>
               <input type="text" inputmode="decimal" class="account-saldo" data-field="saldo" value="${acc.saldo}">
             </div>
             <div class="account-field account-inkopspris-wrap" style="${isDepa ? '' : 'display:none;'}">
@@ -133,6 +150,7 @@ const FireAccounts = {
               <input type="text" inputmode="decimal" class="account-inkopspris" data-field="inkopspris" value="${acc.inkopspris}">
             </div>
           </div>
+          ${isOther ? `<div style="color:#888; font-size:11px; margin-top:6px; font-style:italic;">Statiskt värde — växer inte med avkastning. Används endast i nettoförmögenhetsjämförelsen.</div>` : ''}
         </div>`;
     });
     container.innerHTML = html;
@@ -140,19 +158,15 @@ const FireAccounts = {
     container.querySelectorAll('.account-item').forEach(item => {
       const id = item.dataset.id;
 
-      // Namn
       const namnEl = item.querySelector('.account-namn');
       namnEl.addEventListener('input', () => FireAccounts.update(id, 'namn', namnEl.value));
 
-      // Typ
       const typEl = item.querySelector('.account-typ');
       typEl.addEventListener('change', () => {
         FireAccounts.update(id, 'typ', typEl.value);
-        const wrap = item.querySelector('.account-inkopspris-wrap');
-        if (wrap) wrap.style.display = typEl.value === 'depa' ? '' : 'none';
+        FireAccounts.render();
       });
 
-      // Saldo
       const saldoEl = item.querySelector('.account-saldo');
       saldoEl.addEventListener('blur', () => {
         const v = (typeof fireEvalExpr === 'function') ? fireEvalExpr(saldoEl.value) : (parseFloat(saldoEl.value) || 0);
@@ -163,7 +177,6 @@ const FireAccounts = {
         if (e.key === 'Enter') { e.preventDefault(); saldoEl.blur(); }
       });
 
-      // Inköpspris
       const inkopEl = item.querySelector('.account-inkopspris');
       if (inkopEl) {
         inkopEl.addEventListener('blur', () => {
@@ -176,14 +189,12 @@ const FireAccounts = {
         });
       }
 
-      // Ta bort
       item.querySelector('.account-remove').addEventListener('click', () => {
         FireAccounts.remove(id);
       });
     });
   },
 
-  // Migrera gamla enskilda saldon → kontolista
   migrateFromFlatValues() {
     if (this.accounts.length > 0) return;
     const iskEl = document.getElementById('isk-balance');
@@ -212,7 +223,7 @@ const FireAccounts = {
     this.accounts = data.map(a => ({
       id: a.id || this._uid(),
       namn: a.namn || '',
-      typ: a.typ === 'depa' ? 'depa' : 'isk',
+      typ: (a.typ === 'depa' || a.typ === 'other') ? a.typ : 'isk',
       saldo: parseFloat(a.saldo) || 0,
       inkopspris: parseFloat(a.inkopspris) || 0
     }));
@@ -225,13 +236,11 @@ const FireAccounts = {
   }
 };
 
-// ─── Initiera ───
 document.addEventListener('DOMContentLoaded', () => {
   const addBtn = document.getElementById('add-account-btn');
   if (addBtn) {
     addBtn.addEventListener('click', () => FireAccounts.add('isk'));
   }
-  // Migrera gamla enskilda saldon (körs efter fireLoadState om storage är laddad före)
   FireAccounts.migrateFromFlatValues();
   FireAccounts.render();
   FireAccounts._renderSummary();

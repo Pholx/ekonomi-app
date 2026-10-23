@@ -59,6 +59,7 @@ const FireCalc = {
             iskTax: this._num('isk-tax', 1.086),
             depaValue: this._num('depa-value', 0),
             depaCost: this._num('depa-cost', 0),
+            otherAssets: this._num('other-assets', 0), // NY: Övriga tillgångar
             saveIsk: this._num('save-isk', 0),
             saveDepa: this._num('save-depa', 0),
             mortgageDebt: this._num('mortgage-debt', 0),
@@ -184,14 +185,7 @@ const FireCalc = {
         return inputs.amortizationRules ? 50 : 200;
     },
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ANDRA LÅN ÄN BOLÅN – läser Budget → Skulder och returnerar info om lån
-    // som INTE automatiskt räknas med i FIRE-kalkylen (billån, CSN, kreditkort,
-    // privatlån, egna skulder). Bolån exkluderas eftersom de hanteras separat
-    // via mortgage-debt + interest-rate + amortization.
-    // Returnerar null om inga sådana lån finns (eller om Budget-data saknas).
-    // ─────────────────────────────────────────────────────────────────────────
-                getOtherDebtsInfo: function() {
+    getOtherDebtsInfo: function() {
         try {
             const raw = localStorage.getItem(BUDGET_STORAGE_KEY);
             if (!raw) return null;
@@ -199,8 +193,8 @@ const FireCalc = {
             const items = payload && payload.items;
             if (!items) return null;
 
-            const aktiva = [];        // lån med ränta/amortering > 0
-            const utanKostnad = [];   // saldo > 0 men 0 kr/mån
+            const aktiva = [];
+            const utanKostnad = [];
             (items.skulder || []).forEach(it => {
                 if (it.type === 'skuld_bolan') return;
                 const saldo = parseFloat(it.values.saldo) || 0;
@@ -432,33 +426,6 @@ const FireCalc = {
         return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     },
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // MONTE CARLO – SÅ HÄR RÄKNAR DEN
-    // ─────────────────────────────────────────────────────────────────────────
-    // 1. Antal simuleringar: 200 (eller 50 om svenska amorteringskrav är på).
-    //
-    // 2. Varje simulering körs år för år med SAMMA gemensamma marknadsfaktor
-    //    (commonZ) för både ISK och Depå. Detta speglar att båda kontona är
-    //    exponerade mot samma marknad – i ett bra år går båda upp, i ett
-    //    dåligt år går båda ner.
-    //
-    // 3. Avkastning per år och konto = aritmetisk drift + commonZ × volatilitet,
-    //    klämd vid -99 % för att undvika orimliga extremvärden.
-    //
-    // 4. Efter alla simuleringar: för varje år sorteras simuleringarna efter
-    //    TOTAL portfölj och de 10 % lägsta + 10 % högsta kastas bort.
-    //    Medelvärdet av de mittersta 80 % används som årets värde.
-    //
-    // 5. ISK, Depå och Depå-kostnad hämtas från EXAKT SAMMA simuleringar som
-    //    valdes för totalen. Detta garanterar att ISK + Depå = Total för
-    //    varje år i resultatet.
-    //
-    // Varför trimmat medelvärde?
-    //   - Rakt medelvärde överskattar kraftigt (lognormala avkastningar har
-    //     positiv skevhet).
-    //   - Ren median är "nära men hackig" och representerar en enskild bana.
-    //   - Trimmat medelvärde ger en jämn, representativ bana nära medianen.
-    // ─────────────────────────────────────────────────────────────────────────
     runMonteCarloSimulation: function() {
         const inputs = this.getInputs();
         const currentHash = this.getInputsHash();
@@ -506,7 +473,6 @@ const FireCalc = {
                     }
                 }
 
-                // Drift = aritmetisk avkastning. Brus på toppen.
                 const commonZ = this.boxMuller();
                 const retIsk = Math.max(-0.99, ret.isk + commonZ * ret.volIsk);
                 const retDepa = Math.max(-0.99, ret.depa + commonZ * ret.volDepa);
@@ -530,8 +496,6 @@ const FireCalc = {
             }
         }
 
-        // Trimmat medelvärde per år: kasta bort 10 % lägsta + 10 % högsta.
-        // Samma sim-uppsättning används för ISK, Depå och DepåCost → additivitet garanterad.
         const trimCount = Math.floor(simulations * 0.10);
 
         const totalResults = [];
@@ -608,16 +572,21 @@ const FireCalc = {
 
         const portfolioToday = inputs.iskBalance + inputs.depaValue;
         const houseEquity = this.getHouseEquity(0);
-        const totalAssets = inputs.includeHouse ? (portfolioToday + houseEquity) : portfolioToday;
+        const otherAssets = inputs.otherAssets || 0;
+        const totalAssets = inputs.includeHouse
+            ? (portfolioToday + houseEquity + otherAssets)
+            : (portfolioToday + otherAssets);
 
         const formatCurrency = (value) => value.toLocaleString('sv-SE') + " kr";
 
         const portfolioEl = document.getElementById('portfolio-value');
         const houseEl = document.getElementById('house-equity');
+        const otherEl = document.getElementById('other-assets-display');
         const totalEl = document.getElementById('total-assets');
 
         if (portfolioEl) portfolioEl.textContent = formatCurrency(portfolioToday);
         if (houseEl) houseEl.textContent = formatCurrency(houseEquity);
+        if (otherEl) otherEl.textContent = otherAssets > 0 ? formatCurrency(otherAssets) : '—';
         if (totalEl) totalEl.textContent = formatCurrency(totalAssets);
 		
 		// ── Varning: ingen allokering angiven ──
@@ -636,7 +605,7 @@ if (warningEl) {
 		
     },
 
-        updateCashflowBox: function(mcResults = null) {
+    updateCashflowBox: function(mcResults = null) {
         const inputs = this.getInputs();
         const container = document.getElementById('cashflow-content');
         if (!container) return;
@@ -674,7 +643,7 @@ if (warningEl) {
 
         const fmt = (v) => Math.round(v).toLocaleString('sv-SE');
 		
-		        const amortWarning = (inputs.amortizationRules && inputs.houseValue === 0)
+		const amortWarning = (inputs.amortizationRules && inputs.houseValue === 0)
           ? `<div class="cashflow-row" style="background:#3a2a1a; padding:12px; border-radius:8px; margin-top:15px; border-left:4px solid #ffaa44; display:block;">
                <div style="color:#ffaa44; font-weight:600; margin-bottom:6px;">⚠️ Amorteringskrav kan inte beräknas</div>
                <div style="color:#ccc; font-size:13px; line-height:1.5;">
@@ -685,9 +654,7 @@ if (warningEl) {
              </div>`
           : '';
 
-                // Varning för andra lån (billån, CSN, kreditkort m.m.) som finns i Budget
-        // men inte räknas med i FIRE-uttaget. Visas bara om sådana lån finns.
-                const otherDebtsInfo = this.getOtherDebtsInfo();
+        const otherDebtsInfo = this.getOtherDebtsInfo();
         const harAktiva = otherDebtsInfo && otherDebtsInfo.count > 0;
         const harUtanKostnad = otherDebtsInfo && otherDebtsInfo.utanKostnad && otherDebtsInfo.utanKostnad.length > 0;
 
@@ -725,7 +692,6 @@ if (warningEl) {
             return `<strong>${fmt(nom)}</strong> kr`;
         };
 		
-		        // Uppdatera rubriken med FIRE-år och kalenderår
         const headingEl = document.getElementById('cashflow-heading');
         if (headingEl) {
             const nuvarandeÅr = new Date().getFullYear();
@@ -812,20 +778,18 @@ if (warningEl) {
         `;
     },
 	
-	        updateFireTableSummary: function(inputs, mcResults) {
+    updateFireTableSummary: function(inputs, mcResults) {
         const el = document.getElementById('fire-table-summary');
         if (!el) return;
 
         const fmtKr = (n) => Math.round(n).toLocaleString('sv-SE') + ' kr';
         const fireStartYear = inputs.fireStartYear;
 
-        // Skydd mot edge cases
         if (fireStartYear > inputs.simYears) {
             el.innerHTML = `<div style="color:#888; font-size:13px;">FIRE-startåret ligger utanför simuleringsperioden.</div>`;
             return;
         }
 
-        // Hämta portföljvärdet vid FIRE-start
         let portAtFire;
         if (inputs.monteCarlo && mcResults) {
             portAtFire = {
@@ -845,7 +809,6 @@ if (warningEl) {
             return;
         }
 
-        // Beräkna uttaget vid FIRE-start
         const withdrawal = this.calculateTotalWithdrawalReal(
             fireStartYear,
             portAtFire.isk,
@@ -857,12 +820,10 @@ if (warningEl) {
         const monthlyReal = Math.round(annualWithdrawalReal / 12);
         const rate = (annualWithdrawalReal / portAtFire.total) * 100;
 
-        // Nominellt uttag (samma tal som kassaflödesrutan visar)
         const inflationFactor = Math.pow(1 + inputs.inflation / 100, fireStartYear);
         const annualWithdrawalNominal = annualWithdrawalReal * inflationFactor;
         const monthlyNominal = Math.round(annualWithdrawalNominal / 12);
 
-        // Kontrollera om portföljen töms
         let depletedYear = null;
         for (let y = fireStartYear; y <= inputs.simYears; y++) {
             const p = (mcResults && inputs.monteCarlo)
@@ -888,7 +849,6 @@ if (warningEl) {
             </div>`;
     },
 
-    // ✅ ISK/Depå-raderna visas även i MC-läget.
     formatPortfolioCell: function(port, isMonteCarlo) {
         const roundedTotal = Math.round(port.total / 100) * 100;
         const roundedIsk = Math.round(port.isk / 100) * 100;
@@ -931,10 +891,8 @@ if (warningEl) {
     },
 
     updateFireTable: function() {
-                const mcCountSpan = document.getElementById('mc-count');
+        const mcCountSpan = document.getElementById('mc-count');
         if (mcCountSpan) {
-            // Visa alltid hur många simuleringar som KÖRS när MC är aktiverat,
-            // även när rutan är avbockad – då syns antalet bara i gråskala.
             mcCountSpan.textContent = this.getInputs().amortizationRules ? 50 : 200;
         }
         this.loanToValueCache = {};
@@ -948,10 +906,10 @@ if (warningEl) {
         const inputs = this.getInputs();
         let mcResults = inputs.monteCarlo ? this.runMonteCarloSimulation() : null;
 
-                this.updateCashflowBox(mcResults);
+        this.updateCashflowBox(mcResults);
         this.updateFireTableSummary(inputs, mcResults);
 
-                if (typeof Motivation !== 'undefined' && Motivation.renderAll) {
+        if (typeof Motivation !== 'undefined' && Motivation.renderAll) {
             Motivation.renderAll(mcResults);
         }
 
@@ -970,12 +928,12 @@ if (warningEl) {
                 : detPort.rawDepaCost;
 
             const houseEquityReal = this.calculateRealValue(this.getHouseEquity(i), i);
-            const totalWealth = inputs.includeHouse ? (port.total + houseEquityReal) : port.total;
+            const otherAssetsReal = this.calculateRealValue(inputs.otherAssets || 0, i);
+            const totalWealth = (inputs.includeHouse ? (port.total + houseEquityReal) : port.total) + otherAssetsReal;
             const isFire = i >= inputs.fireStartYear;
 
             const inflationFactor = Math.pow(1 + inputs.inflation / 100, i);
 
-            // Uttag + uttagsfrekvens
             let withdrawal = "-";
             let withdrawalRate = "-";
             if (isFire) {
@@ -1005,7 +963,7 @@ if (warningEl) {
 
             const portDisplay = this.formatPortfolioCell(port, inputs.monteCarlo);
             const loanDisplay = this.formatLoanCell(i);
-                        const yearDisplay = isFireStartYear ? `<strong>🔥 År ${i}</strong><br><span style="font-size:10px; color:#4caf50;">FIRE START</span>` : `<strong>År ${i}</strong>`;
+            const yearDisplay = isFireStartYear ? `<strong>🔥 År ${i}</strong><br><span style="font-size:10px; color:#4caf50;">FIRE START</span>` : `<strong>År ${i}</strong>`;
 
             row.innerHTML = `
                 <td>${yearDisplay}</td>
@@ -1024,19 +982,18 @@ if (warningEl) {
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof renderAssets !== 'undefined') renderAssets();
 
-    const ids = ['isk-balance','isk-tax','depa-value','depa-cost','save-isk','save-depa',
+    const ids = ['isk-balance','isk-tax','depa-value','depa-cost','other-assets','save-isk','save-depa',
                  'fixed-costs','variable-costs','house-upkeep','other-costs','mortgage-debt','interest-rate',
                  'amortization','inflation','house-appreciation','sim-years','fire-start-year',
 				 'include-house','monte-carlo','amortization-rules','house-value','withdrawal-strategy'];
 
-        ids.forEach(id => {
+    ids.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         const isSelect = el.tagName === 'SELECT';
-const eventType = (el.type === 'checkbox' || isSelect) ? 'change' : 'input';
-el.addEventListener(eventType, () => FireCalc.debouncedUpdate());
+        const eventType = (el.type === 'checkbox' || isSelect) ? 'change' : 'input';
+        el.addEventListener(eventType, () => FireCalc.debouncedUpdate());
 
-        // Miniräknare: utvärdera uttryck vid blur eller Enter
         if (el.type !== 'checkbox' && !isSelect) {
             el.addEventListener('blur', () => {
                 const v = fireEvalExpr(el.value);
@@ -1067,7 +1024,7 @@ el.addEventListener(eventType, () => FireCalc.debouncedUpdate());
 
 function exportSettings() {
     const settings = {};
-    const ids = ['isk-balance','isk-tax','depa-value','depa-cost','save-isk','save-depa',
+    const ids = ['isk-balance','isk-tax','depa-value','depa-cost','other-assets','save-isk','save-depa',
                  'fixed-costs','variable-costs','house-upkeep','other-costs','mortgage-debt','interest-rate',
                  'amortization','inflation','house-appreciation','sim-years','fire-start-year',
 				 'include-house','monte-carlo','amortization-rules','house-value','withdrawal-strategy'];
@@ -1114,7 +1071,7 @@ function importSettings() {
         reader.onload = function(e) {
             try {
                 const settings = JSON.parse(e.target.result);
-                const ids = ['isk-balance','isk-tax','depa-value','depa-cost','save-isk','save-depa',
+                const ids = ['isk-balance','isk-tax','depa-value','depa-cost','other-assets','save-isk','save-depa',
                              'fixed-costs','variable-costs','house-upkeep','other-costs','mortgage-debt','interest-rate',
                              'amortization','inflation','house-appreciation','sim-years','fire-start-year',
 							 'house-value','withdrawal-strategy'];

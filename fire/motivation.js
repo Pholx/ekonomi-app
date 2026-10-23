@@ -340,7 +340,7 @@ _getBudgetItems: function() {
         const fireRemaining = Math.max(0, fireGoalAmount - portfolioValue);
 
         // ─── Underlag för de 3 nya analyskorten ───
-        const totalAssets  = portfolioValue + inputs.houseValue;
+        const totalAssets  = portfolioValue + inputs.houseValue + (inputs.otherAssets || 0);
         const totalDebts   = this._getTotalBudgetDebt();
         const annualGross  = this._getAnnualGrossIncome();
         const dailyPassive = currentFourPercentMonthly / 30;

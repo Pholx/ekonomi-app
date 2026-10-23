@@ -85,12 +85,12 @@
             </div>
 
             <div class="card-grid two-col">
-                <div class="card">
-    <h2>1. Mina konton <span class="q-icon" data-tooltip-field="accounts">?</span></h2>
+<div class="card">
+    <h2>1. Mina tillgångar <span class="q-icon" data-tooltip-field="accounts">?</span></h2>
 
     <div class="accounts-list" id="accounts-list"></div>
 
-    <button type="button" class="toolbar-btn" id="add-account-btn" style="width:100%; margin-bottom:12px;">+ Lägg till konto</button>
+    <button type="button" class="toolbar-btn" id="add-account-btn" style="width:100%; margin-bottom:12px;">+ Lägg till tillgång</button>
 
     <div id="accounts-summary" style="margin-bottom:12px; padding:10px 12px; background:#1a1a1a; border-radius:6px;"></div>
 
@@ -100,6 +100,7 @@
     <input type="hidden" id="isk-balance" value="0">
     <input type="hidden" id="depa-value" value="0">
     <input type="hidden" id="depa-cost" value="0">
+    <input type="hidden" id="other-assets" value="0">
 </div>
                 <div class="card">
                     <h2>Sparande fram till FIRE <span class="q-icon" data-tooltip-field="save-isk">?</span></h2>
@@ -326,12 +327,13 @@
     Simuleringen använder <strong>medelvärdet mellan aritmetisk och geometrisk avkastning</strong> som en balanserad uppskattning.
 </div>
         </div>
-        <div class="summary-section">
-            <div class="summary-heading">💰 FÖRMÖGENHETSÖVERSIKT</div>
-            <div class="summary-row">Brutto marknadsvärde portfölj idag: <span id="portfolio-value">0 kr</span></div>
-            <div class="summary-row">Eget kapital i huset idag: <span id="house-equity">0 kr</span></div>
-            <div class="summary-row total-row"><strong>TOTAL FÖRMÖGENHET IDAG:</strong> <span id="total-assets" class="total">0 kr</span></div>
-        </div>
+<div class="summary-section">
+    <div class="summary-heading">💰 FÖRMÖGENHETSÖVERSIKT</div>
+    <div class="summary-row">Brutto marknadsvärde portfölj idag: <span id="portfolio-value">0 kr</span></div>
+    <div class="summary-row">Eget kapital i huset idag: <span id="house-equity">0 kr</span></div>
+    <div class="summary-row">Övriga tillgångar (bil, smycken m.m.): <span id="other-assets-display">0 kr</span></div>
+    <div class="summary-row total-row"><strong>TOTAL FÖRMÖGENHET IDAG:</strong> <span id="total-assets" class="total">0 kr</span></div>
+</div>
     </section>
 
     <!-- 2. Kassaflöde -->

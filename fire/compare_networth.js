@@ -4,15 +4,13 @@
 // Summan av:
 //   • ISK + Depå (från FireCalc)
 //   • Bostadens marknadsvärde minus bolån (netto bostadsförmögenhet)
+//   • Övriga tillgångar (bil, smycken, konst m.m.) — statiskt värde
 //
 // Jämförs mot svenska hushåll i samma ålder.
 //
 // ⚠️ Vinstskatt på bostaden är INTE avräknad — siffran är därför en
 //    aning optimistisk. SCB:s statistik räknar inte heller bort latent
 //    skatt, så jämförelsen är konsistent.
-//
-// ⚠️ Siffrorna i DATA är uppskattningar baserade på SCB:s
-//    förmögenhetsstatistik. Byt ut mot officiell data när du vill.
 // ════════════════════════════════════════════════════════════════════
 
 const CompareNetWorth = {
@@ -173,8 +171,9 @@ const CompareNetWorth = {
     const houseValue = inputs.houseValue;
     const mortgage = inputs.mortgageDebt;
     const houseEquity = Math.max(0, houseValue - mortgage);
+    const otherAssets = inputs.otherAssets || 0;
     const otherDebts = this._getNonMortgageDebts();
-    const totalNet = portfolio + houseEquity - otherDebts;
+    const totalNet = portfolio + houseEquity + otherAssets - otherDebts;
 
     const vuxna = this._getAdults();
     if (vuxna.length === 0) return { status: 'inga_personer' };
@@ -188,7 +187,7 @@ const CompareNetWorth = {
 
     for (const p of vuxna) {
       const alder = parseInt(p.values.alder);
-      const grupp = this._ageGroup(alder);       // behålls för visning
+      const grupp = this._ageGroup(alder);
       medianSumma += this._getStat(alder, 'medianNetto');
       genomsnittSumma += this._getStat(alder, 'genomsnittNetto');
       grupper.push(grupp);
@@ -214,6 +213,7 @@ const CompareNetWorth = {
       houseEquity,
       houseValue,
       mortgage,
+      otherAssets,
       otherDebts,
       totalNet,
       median: medianSumma,
@@ -252,6 +252,8 @@ const CompareNetWorth = {
     }
 
     const harBostad = result.houseValue > 0;
+    const harAndraTillgangar = result.otherAssets > 0;
+    
     const bostadLabel = harBostad
       ? `Bostad (netto)`
       : `Bostad`;
@@ -289,6 +291,13 @@ const CompareNetWorth = {
             <div style="color:#888; font-size:11.5px; margin-top:4px;">ISK + Depå</div>
           </div>
 
+          ${harAndraTillgangar ? `
+          <div class="compare-housing-item">
+            <div class="compare-housing-label">🏆 Övriga tillgångar</div>
+            <div class="compare-housing-value" style="color:#ffaa44;">${this._fmt(result.otherAssets)}</div>
+            <div style="color:#888; font-size:11.5px; margin-top:4px;">Fordon, smycken, konst m.m.</div>
+          </div>` : ''}
+
           ${result.otherDebts > 0 ? `
           <div class="compare-housing-item">
             <div class="compare-housing-label">💳 Övriga skulder</div>
@@ -316,7 +325,8 @@ const CompareNetWorth = {
         ${this._buildNetWorthScale(result.totalNet, result.antalVuxna)}
 
         <div class="motivation-footer">
-          📌 Nettoförmögenhet = ISK + Depå + bostadens marknadsvärde − bolån − övriga skulder (CSN, billån, kreditkort m.m.).<br>
+          📌 Nettoförmögenhet = ISK + Depå + övriga tillgångar + bostadens marknadsvärde − bolån − övriga skulder (CSN, billån, kreditkort m.m.).<br>
+          ⚠️ Övriga tillgångar (bil, smycken, konst) räknas som <strong>statiskt värde</strong> och växer inte med avkastning.<br>
           📊 <strong>Median och genomsnitt</strong> är åldersanpassade (per person, skalas med antal vuxna i hushållet).<br>
           🏆 <strong>Percentilgränserna</strong> gäller <em>hela befolkningen</em> (alla åldrar) — samma trösklar oavsett ålder.<br>
           Vinstskatt på bostaden är <strong>inte</strong> avräknad (skatten är latent och beror på inköpspris).

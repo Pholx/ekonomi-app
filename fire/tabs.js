@@ -119,10 +119,12 @@ labels: {
             sumEl.textContent = text ? ' · ' + text : '';
         };
 
-        // Förmögenhet: total portfölj idag
+        // Förmögenhet: total portfölj idag (inkl. övriga tillgångar)
         const isk  = this._num('isk-balance');
         const depa = this._num('depa-value');
-        const portfolio = isk + depa;
+        const other = this._num('other-assets');
+        const portfolio = isk + depa + other;
+        
         setPillSum('formogenhet', portfolio > 0 ? fmt(portfolio) + ' kr' : '');
 
         // Boende: bolåneskuld

@@ -164,8 +164,8 @@ const FireBridge = {
         return 'Ange ditt totala Depå-innehav idag.\n\nHämtas INTE från Budget — fyll i manuellt.';
       }
       case 'accounts': {
-        return 'Lägg till dina ISK- och Depåkonton.\n\n• ISK-konton: fyll i namn, saldo\n• Depåkonton: fyll i namn, saldo och inköpspris (för vinstskatt)\n\nAlla ISK-konton slås ihop → används som "ISK innehav" i simuleringen.\nAlla Depåkonton slås ihop → används som "Depå marknadsvärde".\n\nISK-schablonskatten anges separat nedanför och gäller hela ISK-summan.\n\n"Totalt" i sammanfattningen är bara för syns skull — ISK och Depå hanteras åtskilt i beräkningarna.';
-      }
+    return 'Lägg till dina tillgångar:\n\n• ISK-konton — saldo\n• Depåkonton — saldo och inköpspris (för vinstskatt)\n• Övriga tillgångar — t.ex. bil, smycken, konst, kontanter (statiskt värde)\n\nAlla ISK-konton slås ihop → används som "ISK innehav" i simuleringen.\nAlla Depåkonton slås ihop → används som "Depå marknadsvärde".\n\nÖvriga tillgångar räknas som statiskt värde — de växer inte med avkastning och används endast i nettoförmögenhetsjämförelsen. De påverkar INTE FIRE-uttagen.';
+}
     }
     return '';
   },
