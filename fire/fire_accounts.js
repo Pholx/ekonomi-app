@@ -150,7 +150,9 @@ const FireAccounts = {
               <input type="text" inputmode="decimal" class="account-inkopspris" data-field="inkopspris" value="${acc.inkopspris}">
             </div>
           </div>
-          ${isOther ? `<div style="color:#888; font-size:11px; margin-top:6px; font-style:italic;">Statiskt värde — växer inte med avkastning. Används endast i nettoförmögenhetsjämförelsen.</div>` : ''}
+          ${isOther ? `<div style="color:#ffaa44; font-size:12px; margin-top:8px; padding:10px 12px; background:rgba(255,170,68,0.08); border-left:3px solid #ffaa44; border-radius:4px; line-height:1.5;">
+  💡 <strong>Ange fullt marknadsvärde</strong> (t.ex. bilens värde innan lån). Lån kopplade till tillgången (billån, CSN etc.) dras automatiskt av om de finns inlagda under <strong>Budget → Skulder</strong>. Detta är ett statiskt värde som inte växer med avkastning.
+</div>` : ''}
         </div>`;
     });
     container.innerHTML = html;
