@@ -163,8 +163,8 @@ const FireBridge = {
             case 'depa-value': {
         return 'Ange ditt totala Depå-innehav idag.\n\nHämtas INTE från Budget — fyll i manuellt.';
       }
-      case 'accounts': {
-    return 'Lägg till dina tillgångar:\n\n• ISK-konton — saldo\n• Depåkonton — saldo och inköpspris (för vinstskatt)\n• Övriga tillgångar — t.ex. bil, smycken, konst, kontanter (statiskt värde)\n\nAlla ISK-konton slås ihop → används som "ISK innehav" i simuleringen.\nAlla Depåkonton slås ihop → används som "Depå marknadsvärde".\n\nÖvriga tillgångar räknas som statiskt värde — de växer inte med avkastning och används endast i nettoförmögenhetsjämförelsen. De påverkar INTE FIRE-uttagen.';
+            case 'accounts': {
+    return 'Lägg till dina tillgångar:\n\n• ISK-konton — saldo\n• Depåkonton — saldo och inköpspris (för vinstskatt)\n• Övriga tillgångar — t.ex. bil, smycken, konst, kontanter (statiskt värde)\n\n⚠️ VIKTIGT för Övriga tillgångar:\nAnge alltid tillgångens FULLA marknadsvärde.\nLån som hör till tillgången (billån, CSN m.m.) dras automatiskt av om de är inlagda under Budget → Skulder.\n\nAlla ISK-konton slås ihop → används som "ISK innehav" i simuleringen.\nAlla Depåkonton slås ihop → används som "Depå marknadsvärde".\n\nÖvriga tillgångar räknas som statiskt värde — de växer inte med avkastning och används endast i nettoförmögenhetsjämförelsen. De påverkar INTE FIRE-uttagen.';
 }
     }
     return '';
